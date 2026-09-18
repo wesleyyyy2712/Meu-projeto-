@@ -206,8 +206,8 @@ private struct AdvancedCameraPanel: View {
     private let items = [("bolt.fill", "Flash"), ("livephoto", "Live"), ("timer", "Timer"), ("plusminus", "Exposição"), ("camera.aperture", "Estilos"), ("camera.filters", "Filtros"), ("rectangle", "Proporção"), ("moon.fill", "Noite")]
     var body: some View {
         VStack(spacing: 14 * scale) {
-            HStack(spacing: 10 * scale) { ForEach(0..<4, id: \\.self) { index in CameraPanelItem(symbol: items[index].0, label: items[index].1) } }
-            HStack(spacing: 10 * scale) { ForEach(4..<8, id: \\.self) { index in CameraPanelItem(symbol: items[index].0, label: items[index].1) } }
+            HStack(spacing: 10 * scale) { ForEach(0..<4, id: \.self) { index in CameraPanelItem(symbol: items[index].0, label: items[index].1) } }
+            HStack(spacing: 10 * scale) { ForEach(4..<8, id: \.self) { index in CameraPanelItem(symbol: items[index].0, label: items[index].1) } }
         }
         .padding(18 * scale)
         .background(Color(white: 0.14), in: RoundedRectangle(cornerRadius: 28 * scale))
