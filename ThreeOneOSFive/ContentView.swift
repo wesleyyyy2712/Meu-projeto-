@@ -9,6 +9,10 @@ struct ContentView: View {
     @State private var showLicense = false
     @State private var checkingLicense = false
     @State private var licenseMessage = ""
+    @State private var livePhotoEnabled = false
+    @State private var nightModeEnabled = false
+    @State private var advancedPanelVisible = false
+    @State private var cameraToast: String?
 
     var body: some View {
         Group {
@@ -24,8 +28,8 @@ struct ContentView: View {
     private var cameraScreen: some View {
         GeometryReader { proxy in
             let scale = proxy.size.width / 1170
-            let topHeight = 339 * scale
-            let bottomHeight = 634 * scale
+            let topHeight = 390 * scale
+            let bottomHeight = 700 * scale
             ZStack {
                 Color.black.ignoresSafeArea()
                 CameraPreview(session: camera.session).ignoresSafeArea()
@@ -46,8 +50,26 @@ struct ContentView: View {
                         .accessibilityLabel("Ativar flash e entrar no aplicativo")
                         .contentShape(Rectangle())
                         .frame(width: 105 * scale, height: 125 * scale)
-                        .position(x: 870 * scale, y: 176 * scale)
+                        .position(x: 870 * scale, y: 188 * scale)
                         .zIndex(20)
+
+                        Button(action: toggleNightMode) { Color.clear }
+                            .buttonStyle(.plain)
+                            .frame(width: 100 * scale, height: 130 * scale)
+                            .position(x: 765 * scale, y: 188 * scale)
+                            .zIndex(21)
+
+                        Button(action: toggleLivePhoto) { Color.clear }
+                            .buttonStyle(.plain)
+                            .frame(width: 100 * scale, height: 130 * scale)
+                            .position(x: 970 * scale, y: 188 * scale)
+                            .zIndex(21)
+
+                        Button(action: toggleAdvancedPanel) { Color.clear }
+                            .buttonStyle(.plain)
+                            .frame(width: 100 * scale, height: 130 * scale)
+                            .position(x: 1070 * scale, y: 188 * scale)
+                            .zIndex(21)
                     }
                     .frame(width: proxy.size.width, height: topHeight)
 
@@ -78,6 +100,24 @@ struct ContentView: View {
                     Color.clear.frame(height: bottomHeight)
                 }
                 .allowsHitTesting(false)
+
+                if advancedPanelVisible {
+                    AdvancedCameraPanel(scale: scale)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .zIndex(30)
+                }
+
+                if let cameraToast {
+                    Text(cameraToast)
+                        .font(.system(size: 20 * scale, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 20 * scale)
+                        .padding(.vertical, 11 * scale)
+                        .background(.black.opacity(0.7), in: Capsule())
+                        .position(x: proxy.size.width - 205 * scale, y: 405 * scale)
+                        .transition(.opacity.combined(with: .scale))
+                        .zIndex(40)
+                }
 
                 if showLicense {
                     LicenseGateView(
@@ -122,6 +162,28 @@ struct ContentView: View {
         }
     }
 
+    private func toggleNightMode() {
+        nightModeEnabled.toggle()
+        showCameraToast(nightModeEnabled ? "MODO NOITE AUTOMÁTICO" : "MODO NOITE DESATIVADO")
+    }
+
+    private func toggleLivePhoto() {
+        livePhotoEnabled.toggle()
+        showCameraToast(livePhotoEnabled ? "LIVE" : "LIVE DESATIVADO")
+    }
+
+    private func toggleAdvancedPanel() {
+        withAnimation(.easeOut(duration: 0.28)) { advancedPanelVisible.toggle() }
+    }
+
+    private func showCameraToast(_ message: String) {
+        withAnimation(.easeOut(duration: 0.2)) { cameraToast = message }
+        Task {
+            try? await Task.sleep(nanoseconds: 1_800_000_000)
+            await MainActor.run { withAnimation(.easeOut(duration: 0.3)) { cameraToast = nil } }
+        }
+    }
+
     private func activateLicense(key: String) {
         checkingLicense = true
         Task {
@@ -148,6 +210,49 @@ struct ContentView: View {
             return Image(systemName: "rectangle.fill")
         }
         return Image(uiImage: image)
+    }
+}
+
+private struct AdvancedCameraPanel: View {
+    let scale: CGFloat
+
+    var body: some View {
+        VStack(spacing: 18 * scale) {
+            HStack(spacing: 28 * scale) {
+                CameraControlIcon(systemName: "bolt.fill", label: "Flash")
+                CameraControlIcon(systemName: "livephoto", label: "Live")
+                CameraControlIcon(systemName: "timer", label: "Timer")
+            }
+            HStack(spacing: 28 * scale) {
+                CameraControlIcon(systemName: "plusminus", label: "Exposição")
+                CameraControlIcon(systemName: "camera.aperture", label: "Estilos")
+                CameraControlIcon(systemName: "camera.filters", label: "Filtros")
+            }
+            HStack(spacing: 28 * scale) {
+                CameraControlIcon(systemName: "moon.fill", label: "Noite")
+                CameraControlIcon(systemName: "rectangle", label: "4:3")
+            }
+        }
+        .padding(.horizontal, 35 * scale)
+        .padding(.vertical, 24 * scale)
+        .frame(maxWidth: .infinity)
+        .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 30 * scale))
+        .padding(.horizontal, 18 * scale)
+        .padding(.bottom, 270 * scale)
+    }
+}
+
+private struct CameraControlIcon: View {
+    let systemName: String
+    let label: String
+
+    var body: some View {
+        VStack(spacing: 5) {
+            Image(systemName: systemName).font(.system(size: 24, weight: .semibold))
+            Text(label).font(.system(size: 10, weight: .medium))
+        }
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity)
     }
 }
 
