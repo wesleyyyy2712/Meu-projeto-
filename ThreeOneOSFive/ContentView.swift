@@ -11,123 +11,61 @@ struct ContentView: View {
     @State private var licenseMessage = ""
     @State private var livePhotoEnabled = false
     @State private var nightModeEnabled = false
+    @State private var flashMode = 0
     @State private var advancedPanelVisible = false
-    @State private var cameraToast: String?
+    @State private var isVideoMode = false
+    @State private var selectedZoom: CGFloat = 1.5
+    @State private var toast: String?
+    @State private var isShutterPressed = false
+    @State private var focusPoint: CGPoint?
+
+    private let zooms: [CGFloat] = [0.5, 1.5, 2.0, 3.0]
 
     var body: some View {
-        Group {
-            if showCamera {
-                cameraScreen
-            } else {
-                AppHomeView()
-            }
-        }
-        .preferredColorScheme(.dark)
+        Group { if showCamera { cameraScreen } else { AppHomeView() } }
+            .preferredColorScheme(.dark)
     }
 
     private var cameraScreen: some View {
         GeometryReader { proxy in
             let scale = proxy.size.width / 1170
-            let topHeight = 390 * scale
-            let bottomHeight = 700 * scale
+            let topHeight = 360 * scale
+            let bottomHeight = 720 * scale
             ZStack {
                 Color.black.ignoresSafeArea()
-                CameraPreview(session: camera.session).ignoresSafeArea()
+                CameraPreview(session: camera.session, focusPoint: $focusPoint)
+                    .ignoresSafeArea()
+                    .overlay(alignment: .top) { Color.black.frame(height: topHeight) }
+                    .overlay(alignment: .bottom) { Color.black.frame(height: bottomHeight) }
 
                 VStack(spacing: 0) {
-                    ZStack {
-                        Color.black
-                        bundleImage(named: "CameraTop")
-                            .resizable()
-                            .frame(width: proxy.size.width, height: topHeight)
-
-                        // A entrada agora é acionada pelo ícone de flash da cápsula superior.
-                        // O obturador permanece somente como elemento visual da câmera.
-                        Button(action: handleFlashTap) {
-                            Color.clear
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Ativar flash e entrar no aplicativo")
-                        .contentShape(Rectangle())
-                        .frame(width: 105 * scale, height: 125 * scale)
-                        .position(x: 870 * scale, y: 188 * scale)
-                        .zIndex(20)
-
-                        Button(action: toggleNightMode) { Color.clear }
-                            .buttonStyle(.plain)
-                            .frame(width: 100 * scale, height: 130 * scale)
-                            .position(x: 765 * scale, y: 188 * scale)
-                            .zIndex(21)
-
-                        Button(action: toggleLivePhoto) { Color.clear }
-                            .buttonStyle(.plain)
-                            .frame(width: 100 * scale, height: 130 * scale)
-                            .position(x: 970 * scale, y: 188 * scale)
-                            .zIndex(21)
-
-                        Button(action: toggleAdvancedPanel) { Color.clear }
-                            .buttonStyle(.plain)
-                            .frame(width: 100 * scale, height: 130 * scale)
-                            .position(x: 1070 * scale, y: 188 * scale)
-                            .zIndex(21)
-                    }
-                    .frame(width: proxy.size.width, height: topHeight)
-
+                    topControls(scale: scale)
+                        .frame(height: topHeight)
                     Spacer(minLength: 0)
-
-                    ZStack {
-                        Color.black
-                        bundleImage(named: "CameraBottom")
-                            .resizable()
-                            .frame(width: proxy.size.width, height: bottomHeight)
-                    }
-                    .frame(width: proxy.size.width, height: bottomHeight)
+                    bottomControls(scale: scale, height: bottomHeight)
+                        .frame(height: bottomHeight)
                 }
 
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    HStack(spacing: 18 * scale) {
-                        Text("0,5").foregroundStyle(.white)
-                        Text("1x")
-                            .foregroundStyle(.yellow)
-                            .frame(width: 92 * scale, height: 92 * scale)
-                            .background(.white.opacity(0.18), in: Circle())
-                        Text("3").foregroundStyle(.white)
-                    }
-                    .font(.system(size: 42 * scale, weight: .semibold))
-                    .padding(.bottom, 18 * scale)
-                    .frame(height: 120 * scale)
-                    Color.clear.frame(height: bottomHeight)
+                if let focusPoint {
+                    FocusReticle(point: focusPoint)
+                        .transition(.opacity)
+                        .zIndex(50)
                 }
-                .allowsHitTesting(false)
-
-                if advancedPanelVisible {
-                    AdvancedCameraPanel(scale: scale)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .zIndex(30)
-                }
-
-                if let cameraToast {
-                    Text(cameraToast)
-                        .font(.system(size: 20 * scale, weight: .semibold))
+                if let toast {
+                    Text(toast)
+                        .font(.system(size: 21 * scale, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 20 * scale)
                         .padding(.vertical, 11 * scale)
-                        .background(.black.opacity(0.7), in: Capsule())
-                        .position(x: proxy.size.width - 205 * scale, y: 405 * scale)
-                        .transition(.opacity.combined(with: .scale))
-                        .zIndex(40)
+                        .background(.black.opacity(0.62), in: Capsule())
+                        .position(x: proxy.size.width / 2, y: 385 * scale)
+                        .transition(.opacity)
+                        .zIndex(60)
                 }
-
                 if showLicense {
-                    LicenseGateView(
-                        isLoading: checkingLicense,
-                        message: $licenseMessage,
-                        onCancel: { showLicense = false },
-                        onActivate: activateLicense
-                    )
-                    .transition(.opacity)
-                    .zIndex(100)
+                    LicenseGateView(isLoading: checkingLicense, message: $licenseMessage,
+                                    onCancel: { showLicense = false }, onActivate: activateLicense)
+                        .transition(.opacity).zIndex(100)
                 }
             }
         }
@@ -136,124 +74,130 @@ struct ContentView: View {
         .onDisappear { camera.stop() }
     }
 
-    private func handleFlashTap() {
-        guard !checkingLicense else { return }
-        checkingLicense = true
-        Task {
-            do {
-                let valid = try await LicenseService.shared.verify()
-                await MainActor.run {
-                    checkingLicense = false
-                    if valid {
-                        camera.stop()
-                        showCamera = false
-                    } else {
-                        licenseMessage = "Nenhuma key ativa neste aparelho."
-                        showLicense = true
-                    }
+    private func topControls(scale: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            Spacer().frame(height: 145 * scale)
+            HStack(spacing: 25 * scale) {
+                CameraTopButton(symbol: nightModeEnabled ? "moon.fill" : "moon", active: nightModeEnabled) { toggleNight() }
+                CameraTopButton(symbol: flashMode == 0 ? "bolt.slash" : "bolt.fill", active: flashMode != 0) { toggleFlash() }
+                CameraTopButton(symbol: livePhotoEnabled ? "livephoto" : "livephoto.slash", active: livePhotoEnabled) { toggleLive() }
+                CameraTopButton(symbol: "circle.grid.3x3.fill", active: false) { toggleAdvanced() }
+            }
+            .padding(.horizontal, 25 * scale)
+            .frame(height: 92 * scale)
+            .background(Color(white: 0.15), in: Capsule())
+            .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1.5 * scale))
+            .padding(.horizontal, 30 * scale)
+            Spacer()
+        }
+    }
+
+    private func bottomControls(scale: CGFloat, height: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            if advancedPanelVisible {
+                AdvancedCameraPanel(scale: scale, onClose: toggleAdvanced)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else {
+                zoomPicker(scale: scale).frame(height: 120 * scale)
+            }
+            Spacer(minLength: 0)
+            HStack(alignment: .center) {
+                GalleryThumbnail(image: camera.lastPhoto)
+                    .frame(width: 120 * scale, height: 120 * scale)
+                Spacer()
+                Button(action: capture) {
+                    Circle()
+                        .fill(isVideoMode ? Color.red : Color.white)
+                        .frame(width: 176 * scale, height: 176 * scale)
+                        .overlay(Circle().stroke(Color.white.opacity(0.35), lineWidth: 8 * scale))
+                        .scaleEffect(isShutterPressed ? 0.86 : 1)
                 }
-            } catch {
-                await MainActor.run {
-                    checkingLicense = false
-                    licenseMessage = error.localizedDescription
-                    showLicense = true
-                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isVideoMode ? "Gravar vídeo" : "Tirar foto")
+                Spacer()
+                Button(action: {}) { Image(systemName: "camera.rotate").font(.system(size: 43 * scale, weight: .medium)).foregroundStyle(.white) }
+                    .frame(width: 120 * scale, height: 120 * scale)
+            }
+            .padding(.horizontal, 80 * scale)
+            .frame(height: 260 * scale)
+            modePicker(scale: scale)
+                .frame(height: 130 * scale)
+        }
+        .padding(.top, 15 * scale)
+        .background(Color.black)
+    }
+
+    private func zoomPicker(scale: CGFloat) -> some View {
+        HStack(spacing: 16 * scale) {
+            ForEach(zooms, id: \.self) { value in
+                Button { selectZoom(value) } label: {
+                    Text(value == 0.5 ? "0,5" : value == 1.5 ? "1,5x" : value == 2 ? "2" : "3")
+                        .font(.system(size: 28 * scale, weight: .semibold))
+                        .foregroundStyle(selectedZoom == value ? .yellow : .white)
+                        .frame(width: 86 * scale, height: 86 * scale)
+                        .background(selectedZoom == value ? .white.opacity(0.16) : .clear, in: Circle())
+                }.buttonStyle(.plain)
             }
         }
     }
 
-    private func toggleNightMode() {
-        nightModeEnabled.toggle()
-        showCameraToast(nightModeEnabled ? "MODO NOITE AUTOMÁTICO" : "MODO NOITE DESATIVADO")
-    }
-
-    private func toggleLivePhoto() {
-        livePhotoEnabled.toggle()
-        showCameraToast(livePhotoEnabled ? "LIVE" : "LIVE DESATIVADO")
-    }
-
-    private func toggleAdvancedPanel() {
-        withAnimation(.easeOut(duration: 0.28)) { advancedPanelVisible.toggle() }
-    }
-
-    private func showCameraToast(_ message: String) {
-        withAnimation(.easeOut(duration: 0.2)) { cameraToast = message }
-        Task {
-            try? await Task.sleep(nanoseconds: 1_800_000_000)
-            await MainActor.run { withAnimation(.easeOut(duration: 0.3)) { cameraToast = nil } }
+    private func modePicker(scale: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            Button { withAnimation(.easeInOut(duration: 0.35)) { isVideoMode = true } } label: { Text("VÍDEO") }
+            Button { withAnimation(.easeInOut(duration: 0.35)) { isVideoMode = false } } label: { Text("FOTO") }
         }
+        .font(.system(size: 30 * scale, weight: .bold))
+        .foregroundStyle(.white)
+        .frame(width: 470 * scale, height: 90 * scale)
+        .background(.white.opacity(0.08), in: Capsule())
+        .overlay(Capsule().stroke(.white.opacity(0.35), lineWidth: 2 * scale))
+        .overlay(alignment: isVideoMode ? .leading : .trailing) { Capsule().fill(.white.opacity(0.11)).frame(width: 235 * scale, height: 86 * scale) }
     }
 
+    private func toggleNight() { nightModeEnabled.toggle(); showToast(nightModeEnabled ? "MODO NOITE AUTOMÁTICO" : "MODO NOITE DESATIVADO") }
+    private func toggleFlash() { flashMode = flashMode == 0 ? 1 : 0; showToast(flashMode == 1 ? "FLASH AUTOMÁTICO" : "FLASH DESATIVADO") }
+    private func toggleLive() { livePhotoEnabled.toggle(); showToast(livePhotoEnabled ? "LIVE" : "LIVE DESATIVADO") }
+    private func toggleAdvanced() { withAnimation(.easeInOut(duration: 0.3)) { advancedPanelVisible.toggle() } }
+    private func selectZoom(_ value: CGFloat) { selectedZoom = value; camera.setZoom(value); showToast(value == 0.5 ? "13 mm" : value == 1.5 ? "35 mm" : value == 2 ? "2x" : "3x") }
+    private func capture() {
+        if isVideoMode { showToast("VÍDEO") ; return }
+        withAnimation(.easeOut(duration: 0.08)) { isShutterPressed = true }
+        camera.capturePhoto()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { withAnimation { isShutterPressed = false } }
+    }
+    private func showToast(_ message: String) {
+        withAnimation(.easeOut(duration: 0.15)) { toast = message }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { withAnimation(.easeOut(duration: 0.25)) { toast = nil } }
+    }
     private func activateLicense(key: String) {
         checkingLicense = true
-        Task {
-            do {
-                _ = try await LicenseService.shared.activate(key: key)
-                await MainActor.run {
-                    checkingLicense = false
-                    showLicense = false
-                    camera.stop()
-                    showCamera = false
-                }
-            } catch {
-                await MainActor.run {
-                    checkingLicense = false
-                    licenseMessage = error.localizedDescription
-                }
-            }
-        }
+        Task { do { _ = try await LicenseService.shared.activate(key: key); await MainActor.run { checkingLicense = false; showLicense = false; camera.stop(); showCamera = false } } catch { await MainActor.run { checkingLicense = false; licenseMessage = error.localizedDescription } } }
     }
-
+    private func handleFlashTap() { toggleFlash() }
     private func bundleImage(named name: String) -> Image {
-        guard let path = Bundle.main.path(forResource: name, ofType: "png"),
-              let image = UIImage(contentsOfFile: path) else {
-            return Image(systemName: "rectangle.fill")
-        }
+        guard let path = Bundle.main.path(forResource: name, ofType: "png"), let image = UIImage(contentsOfFile: path) else { return Image(systemName: "rectangle.fill") }
         return Image(uiImage: image)
     }
 }
 
-private struct AdvancedCameraPanel: View {
-    let scale: CGFloat
-
+private struct CameraTopButton: View {
+    let symbol: String
+    let active: Bool
+    let action: () -> Void
     var body: some View {
-        VStack(spacing: 18 * scale) {
-            HStack(spacing: 28 * scale) {
-                CameraControlIcon(systemName: "bolt.fill", label: "Flash")
-                CameraControlIcon(systemName: "livephoto", label: "Live")
-                CameraControlIcon(systemName: "timer", label: "Timer")
-            }
-            HStack(spacing: 28 * scale) {
-                CameraControlIcon(systemName: "plusminus", label: "Exposição")
-                CameraControlIcon(systemName: "camera.aperture", label: "Estilos")
-                CameraControlIcon(systemName: "camera.filters", label: "Filtros")
-            }
-            HStack(spacing: 28 * scale) {
-                CameraControlIcon(systemName: "moon.fill", label: "Noite")
-                CameraControlIcon(systemName: "rectangle", label: "4:3")
-            }
-        }
-        .padding(.horizontal, 35 * scale)
-        .padding(.vertical, 24 * scale)
-        .frame(maxWidth: .infinity)
-        .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 30 * scale))
-        .padding(.horizontal, 18 * scale)
-        .padding(.bottom, 270 * scale)
+        Button(action: action) { Image(systemName: symbol).font(.system(size: 36, weight: .medium)).foregroundStyle(active ? .yellow : .white).frame(width: 64, height: 64).contentShape(Rectangle()) }
+            .buttonStyle(.plain)
     }
 }
 
-private struct CameraControlIcon: View {
-    let systemName: String
-    let label: String
+private struct FocusReticle: View {
+    let point: CGPoint
+    var body: some View { RoundedRectangle(cornerRadius: 3).stroke(.yellow, lineWidth: 2).frame(width: 90, height: 90).position(point).overlay(Image(systemName: "sun.max.fill").foregroundStyle(.yellow).position(x: point.x + 55, y: point.y - 35)) }
+}
 
-    var body: some View {
-        VStack(spacing: 5) {
-            Image(systemName: systemName).font(.system(size: 24, weight: .semibold))
-            Text(label).font(.system(size: 10, weight: .medium))
-        }
-        .foregroundStyle(.white)
-        .frame(maxWidth: .infinity)
-    }
+private struct GalleryThumbnail: View {
+    let image: UIImage?
+    var body: some View { Group { if let image { Image(uiImage: image).resizable().scaledToFill() } else { Color.white.opacity(0.08) } }.clipShape(RoundedRectangle(cornerRadius: 12)) }
 }
 
 private struct LicenseGateView: View {
@@ -414,44 +358,62 @@ private final class LicenseService {
     }
 }
 
-private final class RearCameraModel: NSObject, ObservableObject {
+private final class RearCameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
     let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "3105.rear-camera")
+    private let photoOutput = AVCapturePhotoOutput()
+    private var device: AVCaptureDevice?
     private var configured = false
+    @Published var lastPhoto: UIImage?
     func start() {
-        guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else {
-            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in if granted { self?.configureAndStart() } }
-            return
-        }
+        guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in if granted { self?.configureAndStart() } }; return }
         configureAndStart()
     }
     func stop() { queue.async { [weak self] in if self?.session.isRunning == true { self?.session.stopRunning() } } }
     private func configureAndStart() {
         queue.async { [weak self] in
             guard let self, !self.configured else { return }
-            self.session.beginConfiguration()
-            self.session.sessionPreset = .photo
+            self.session.beginConfiguration(); self.session.sessionPreset = .photo
             guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back), let input = try? AVCaptureDeviceInput(device: device), self.session.canAddInput(input) else { self.session.commitConfiguration(); return }
-            self.session.addInput(input)
-            self.configured = true
-            self.session.commitConfiguration()
-            self.session.startRunning()
+            self.device = device; self.session.addInput(input)
+            if self.session.canAddOutput(self.photoOutput) { self.session.addOutput(self.photoOutput) }
+            self.configured = true; self.session.commitConfiguration(); self.session.startRunning()
         }
+    }
+    func setZoom(_ factor: CGFloat) {
+        queue.async { [weak self] in guard let self, let device = self.device else { return }; do { try device.lockForConfiguration(); device.videoZoomFactor = min(max(factor, 1), device.activeFormat.videoMaxZoomFactor); device.unlockForConfiguration() } catch {} }
+    }
+    func capturePhoto() {
+        queue.async { [weak self] in guard let self else { return }; self.photoOutput.capturePhoto(with: AVCapturePhotoSettings(), delegate: self) }
+    }
+    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+        guard error == nil, let data = photo.fileDataRepresentation(), let image = UIImage(data: data) else { return }
+        DispatchQueue.main.async { self.lastPhoto = image }
     }
 }
 
 private struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
-    func makeUIView(context: Context) -> PreviewView { let view = PreviewView(); view.videoPreviewLayer.session = session; view.videoPreviewLayer.videoGravity = .resizeAspectFill; return view }
+    @Binding var focusPoint: CGPoint?
+    func makeCoordinator() -> Coordinator { Coordinator(focusPoint: $focusPoint) }
+    func makeUIView(context: Context) -> PreviewView { let view = PreviewView(); view.videoPreviewLayer.session = session; view.videoPreviewLayer.videoGravity = .resizeAspectFill; view.onTap = { point in context.coordinator.focus(at: point, in: view) }; return view }
     func updateUIView(_ view: PreviewView, context: Context) { view.videoPreviewLayer.session = session }
+    final class Coordinator { @Binding var focusPoint: CGPoint?; init(focusPoint: Binding<CGPoint?>) { _focusPoint = focusPoint }; func focus(at point: CGPoint, in view: PreviewView) { focusPoint = point; view.onFocus?(point) } }
 }
-
 private final class PreviewView: UIView {
     override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
     var videoPreviewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+    var onTap: ((CGPoint) -> Void)?
+    var onFocus: ((CGPoint) -> Void)?
+    override init(frame: CGRect) { super.init(frame: frame); addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))) }
+    required init?(coder: NSCoder) { fatalError() }
+    @objc private func tapped(_ recognizer: UITapGestureRecognizer) { onTap?(recognizer.location(in: self)) }
 }
 
 #Preview { ContentView() }
+
+
+
 import SwiftUI
 import UIKit
 
