@@ -200,6 +200,28 @@ private struct GalleryThumbnail: View {
     var body: some View { Group { if let image { Image(uiImage: image).resizable().scaledToFill() } else { Color.white.opacity(0.08) } }.clipShape(RoundedRectangle(cornerRadius: 12)) }
 }
 
+private struct AdvancedCameraPanel: View {
+    let scale: CGFloat
+    let onClose: () -> Void
+    private let items = [("bolt.fill", "Flash"), ("livephoto", "Live"), ("timer", "Timer"), ("plusminus", "Exposição"), ("camera.aperture", "Estilos"), ("camera.filters", "Filtros"), ("rectangle", "Proporção"), ("moon.fill", "Noite")]
+    var body: some View {
+        VStack(spacing: 14 * scale) {
+            HStack(spacing: 10 * scale) { ForEach(0..<4, id: \\.self) { index in CameraPanelItem(symbol: items[index].0, label: items[index].1) } }
+            HStack(spacing: 10 * scale) { ForEach(4..<8, id: \\.self) { index in CameraPanelItem(symbol: items[index].0, label: items[index].1) } }
+        }
+        .padding(18 * scale)
+        .background(Color(white: 0.14), in: RoundedRectangle(cornerRadius: 28 * scale))
+        .overlay(RoundedRectangle(cornerRadius: 28 * scale).stroke(.white.opacity(0.16), lineWidth: 1.5 * scale))
+        .padding(.horizontal, 20 * scale)
+        .padding(.bottom, 300 * scale)
+    }
+}
+private struct CameraPanelItem: View {
+    let symbol: String
+    let label: String
+    var body: some View { VStack(spacing: 5) { Image(systemName: symbol).font(.system(size: 23, weight: .medium)); Text(label).font(.system(size: 10, weight: .medium)) }.foregroundStyle(.white).frame(maxWidth: .infinity) }
+}
+
 private struct LicenseGateView: View {
     let isLoading: Bool
     @Binding var message: String
