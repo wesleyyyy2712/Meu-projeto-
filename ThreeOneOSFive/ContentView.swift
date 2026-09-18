@@ -129,7 +129,7 @@ struct ContentView: View {
 
     private func zoomPicker(scale: CGFloat) -> some View {
         HStack(spacing: 16 * scale) {
-            ForEach(zooms, id: \.self) { value in
+            ForEach(zooms) { value in
                 Button { selectZoom(value) } label: {
                     Text(value == 0.5 ? "0,5" : value == 1.5 ? "1,5x" : value == 2 ? "2" : "3")
                         .font(.system(size: 28 * scale, weight: .semibold))
@@ -206,8 +206,8 @@ private struct AdvancedCameraPanel: View {
     private let items = [("bolt.fill", "Flash"), ("livephoto", "Live"), ("timer", "Timer"), ("plusminus", "Exposição"), ("camera.aperture", "Estilos"), ("camera.filters", "Filtros"), ("rectangle", "Proporção"), ("moon.fill", "Noite")]
     var body: some View {
         VStack(spacing: 14 * scale) {
-            HStack(spacing: 10 * scale) { ForEach(0..<4, id: \.self) { index in CameraPanelItem(symbol: items[index].0, label: items[index].1) } }
-            HStack(spacing: 10 * scale) { ForEach(4..<8, id: \.self) { index in CameraPanelItem(symbol: items[index].0, label: items[index].1) } }
+            HStack(spacing: 10 * scale) { ForEach(0..<4) { index in CameraPanelItem(symbol: items[index].0, label: items[index].1) } }
+            HStack(spacing: 10 * scale) { ForEach(4..<8) { index in CameraPanelItem(symbol: items[index].0, label: items[index].1) } }
         }
         .padding(18 * scale)
         .background(Color(white: 0.14), in: RoundedRectangle(cornerRadius: 28 * scale))
